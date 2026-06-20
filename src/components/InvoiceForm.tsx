@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Box, Paper, Typography, Button, TextField, Select, MenuItem,
@@ -15,6 +16,9 @@ import { InvoicePreviewModal } from './InvoicePreviewModal';
 
 export const InvoiceForm: React.FC = () => {
   const { clients, articles, categories, refreshInvoices } = useData();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const editId = searchParams.get('id');
   const theme = useTheme();
 
   const [selectedClient, setSelectedClient] = useState<string>('');
@@ -23,18 +27,42 @@ export const InvoiceForm: React.FC = () => {
   const [quantite, setQuantite] = useState<number>(1);
   const [remise, setRemise] = useState<number>(0);
   const [loading, setLoading] = useState(false);
+  const [pageLoading, setPageLoading] = useState(!!editId);
   const [dataLoaded, setDataLoaded] = useState(false);
   const [totaux, setTotaux] = useState({ totalHT: 0, totalTVA: 0, totalTTC: 0 });
   const [previewOpen, setPreviewOpen] = useState(false);
+  const isEditing = !!editId;
 
   useEffect(() => {
     if (articles?.length && categories?.length) setDataLoaded(true);
   }, [articles, categories]);
 
+  useEffect(() => {
+    if (!editId || !dataLoaded) return;
+    invoiceApi.get(editId).then((inv: Facture) => {
+      setSelectedClient(inv.client_id);
+      setFactureArticles(inv.articles.map(a => ({
+        id: a.article_id,
+        designation: a.designation,
+        quantite: a.quantite,
+        prix_unitaire: a.prix_unitaire,
+        categorie_id: a.categorie_id,
+        remise: a.remise || 0,
+        total_ligne: a.total_ligne,
+        tva: a.tva || 0,
+      })));
+      setPageLoading(false);
+    }).catch(() => {
+      toast.error('Facture introuvable');
+      navigate('/dashboard');
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editId, dataLoaded]);
+
   const calculerTotaux = useCallback(() => {
-    if (!categories || !articles) return { totalHT: 0, totalTVA: 0, totalTTC: 0 };
+    if (!categories) return { totalHT: 0, totalTVA: 0, totalTTC: 0 };
     return calculerTotauxFacture(factureArticles, categories, 'par_categorie');
-  }, [factureArticles, categories, articles]);
+  }, [factureArticles, categories]);
 
   useEffect(() => {
     setTotaux(calculerTotaux());
@@ -71,8 +99,7 @@ export const InvoiceForm: React.FC = () => {
     setLoading(true);
     try {
       const t = calculerTotaux();
-      await invoiceApi.create({
-        numero: genererNumeroFacture(),
+      const payload = {
         client_id: selectedClient,
         total_ht: t.totalHT,
         tva: t.totalTVA,
@@ -88,11 +115,17 @@ export const InvoiceForm: React.FC = () => {
           categorie_id: a.categorie_id,
           tva: a.tva || 0,
         })),
-      });
-      toast.success('Facture créée! Vous pouvez la soumettre depuis la liste.');
+      };
+
+      if (isEditing) {
+        await invoiceApi.update(editId, payload);
+        toast.success('Facture modifiée!');
+      } else {
+        await invoiceApi.create({ ...payload, numero: genererNumeroFacture() });
+        toast.success('Facture créée! Vous pouvez la soumettre depuis la liste.');
+      }
       refreshInvoices();
-      setSelectedClient('');
-      setFactureArticles([]);
+      navigate('/dashboard');
     } catch (err: any) {
       toast.error('Erreur: ' + (err.response?.data?.error || err.message));
     } finally {
@@ -112,14 +145,16 @@ export const InvoiceForm: React.FC = () => {
     } as Facture, client);
   };
 
-  if (!dataLoaded) {
+  if (!dataLoaded || pageLoading) {
     return <Container maxWidth="lg"><Paper elevation={0} sx={{ p: 4, mt: 2, borderRadius: 3 }}><Typography>Chargement...</Typography></Paper></Container>;
   }
 
   return (
     <Container maxWidth="lg">
       <Paper elevation={0} sx={{ p: 4, mt: 2, borderRadius: 3, background: alpha(theme.palette.background.paper, 0.8), backdropFilter: 'blur(10px)', border: 1, borderColor: 'divider' }}>
-        <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>Création de Facture</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 700, mb: 3 }}>
+          {isEditing ? 'Modification de Facture' : 'Création de Facture'}
+        </Typography>
 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
@@ -212,7 +247,7 @@ export const InvoiceForm: React.FC = () => {
               disabled={!factureArticles.length}>PDF</Button>
             <Button variant="contained" onClick={sauvegarderFacture}
               disabled={loading || !selectedClient || !factureArticles.length}>
-              {loading ? 'En cours...' : 'Créer (brouillon)'}
+              {loading ? 'En cours...' : isEditing ? 'Enregistrer' : 'Créer (brouillon)'}
             </Button>
           </Box>
         </Box>
@@ -228,8 +263,8 @@ export const InvoiceForm: React.FC = () => {
         client={clients.find(c => c.id === selectedClient) || null}
         articles={factureArticles.map(a => ({
           id: a.id || 0, designation: a.designation, prix_unitaire: a.prix_unitaire,
-          quantity: a.quantite, tva: categories.find(c => c.id === a.categorie_id)?.tva || 20,
-        } as any))}
+          quantity: a.quantite, tva: categories.find(c => c.id === a.categorie_id)?.tva || 20, categorie_id: a.categorie_id,
+        }))}
       />
     </Container>
   );

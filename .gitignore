@@ -2,6 +2,7 @@
 
 # dependencies
 /node_modules
+backend/node_modules
 /.pnp
 .pnp.js
 
@@ -10,6 +11,14 @@
 
 # production
 /build
+
+# environment files
+.env
+backend/.env
+
+# database
+*.db
+backend/prisma/dev.db
 
 # misc
 .DS_Store

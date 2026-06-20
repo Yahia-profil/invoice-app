@@ -73,7 +73,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   const isAdmin = req.userRole === 'admin';
-  const where: any = { id: req.params.id };
+  const where: any = { id: req.params.id as string };
   if (!isAdmin) where.user_id = req.userId;
 
   const invoice = await prisma.invoice.findFirst({
@@ -128,18 +128,19 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const existing = await prisma.invoice.findFirst({
-      where: { id: req.params.id, user_id: req.userId },
-    });
+    const isAdmin = req.userRole === 'admin';
+    const where: any = { id: req.params.id as string };
+    if (!isAdmin) where.user_id = req.userId;
+    const existing = await prisma.invoice.findFirst({ where });
     if (!existing) { res.status(404).json({ error: 'Invoice not found' }); return; }
     if (existing.statut !== 'brouillon') {
       res.status(400).json({ error: 'Can only edit invoices in draft status' });
       return;
     }
     const data = invoiceSchema.partial().parse(req.body);
-    await prisma.invoiceArticle.deleteMany({ where: { invoice_id: req.params.id } });
+    await prisma.invoiceArticle.deleteMany({ where: { invoice_id: req.params.id as string } });
     const updated = await prisma.invoice.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         ...data,
         articles: data.articles ? {
@@ -170,7 +171,9 @@ router.patch('/:id/status', async (req: AuthRequest, res: Response) => {
     const { statut } = z.object({ statut: z.string().min(1) }).parse(req.body);
     const isAdmin = req.userRole === 'admin';
 
-    const invoice = await prisma.invoice.findFirst({ where: { id: req.params.id } });
+    const where: any = { id: req.params.id as string };
+    if (!isAdmin) where.user_id = req.userId;
+    const invoice = await prisma.invoice.findFirst({ where });
     if (!invoice) { res.status(404).json({ error: 'Invoice not found' }); return; }
     if (!canTransition(invoice.statut, statut)) {
       res.status(400).json({ error: `Cannot transition from '${invoice.statut}' to '${statut}'` });
@@ -182,7 +185,7 @@ router.patch('/:id/status', async (req: AuthRequest, res: Response) => {
     }
 
     const updated = await prisma.invoice.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         statut,
         validated_by_admin: statut === 'validee_admin' ? true : undefined,
@@ -198,14 +201,68 @@ router.patch('/:id/status', async (req: AuthRequest, res: Response) => {
   }
 });
 
+router.patch('/:id/payment', async (req: AuthRequest, res: Response) => {
+  try {
+    const paymentSchema = z.object({
+      statut: z.string().optional(),
+      date_depot: z.string().optional(),
+      date_encaissement: z.string().optional(),
+      type_virement: z.string().optional(),
+    });
+    const data = paymentSchema.parse(req.body);
+    const isAdmin = req.userRole === 'admin';
+
+    const where: any = { id: req.params.id as string };
+    if (!isAdmin) where.user_id = req.userId;
+    const invoice = await prisma.invoice.findFirst({ where });
+    if (!invoice) { res.status(404).json({ error: 'Invoice not found' }); return; }
+
+    const updateData: any = {};
+    if (data.date_depot) updateData.date_depot = new Date(data.date_depot);
+    if (data.date_encaissement) updateData.date_encaissement = new Date(data.date_encaissement);
+    if (data.type_virement) updateData.type_virement = data.type_virement;
+    if (data.statut) {
+      if (!canTransition(invoice.statut, data.statut)) {
+        res.status(400).json({ error: `Cannot transition from '${invoice.statut}' to '${data.statut}'` });
+        return;
+      }
+      if ((data.statut === 'validee_admin' || data.statut === 'rejetee_admin' || data.statut === 'signee') && !isAdmin) {
+        res.status(403).json({ error: 'Only admins can perform this action' });
+        return;
+      }
+      updateData.statut = data.statut;
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id: req.params.id as string },
+      data: updateData,
+      include: { articles: true, client: true },
+    });
+
+    if (data.statut && data.statut !== invoice.statut) {
+      await createAuditLog(updated.id, `status_change:${data.statut}`, req.userId!, invoice.statut, data.statut);
+    }
+
+    res.json(updated);
+  } catch (err) {
+    if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return; }
+    res.status(500).json({ error: 'Server error' });
+  }
+});
+
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   const isAdmin = req.userRole === 'admin';
-  const where: any = { id: req.params.id };
+  const where: any = { id: req.params.id as string };
   if (!isAdmin) where.user_id = req.userId;
 
   const existing = await prisma.invoice.findFirst({ where });
   if (!existing) { res.status(404).json({ error: 'Invoice not found' }); return; }
-  await prisma.invoice.delete({ where: { id: req.params.id } });
+  const deletable = ['brouillon', 'soumise', 'rejetee_admin'];
+  if (!deletable.includes(existing.statut)) {
+    res.status(400).json({ error: 'Cannot delete invoice in current status' });
+    return;
+  }
+  await prisma.invoice.delete({ where: { id: req.params.id as string } });
   res.json({ success: true });
 });
 
@@ -224,7 +281,7 @@ router.get('/admin/pending', adminOnly, async (_req: AuthRequest, res: Response)
 
 router.get('/:id/audit', async (req: AuthRequest, res: Response) => {
   const isAdmin = req.userRole === 'admin';
-  const where: any = { invoice_id: req.params.id };
+  const where: any = { invoice_id: req.params.id as string };
   if (!isAdmin) where.invoice = { user_id: req.userId };
 
   const logs = await prisma.auditLog.findMany({

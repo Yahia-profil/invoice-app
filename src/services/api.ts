@@ -53,6 +53,8 @@ export const invoiceApi = {
   delete: (id: string) => api.delete(`/invoices/${id}`).then(r => r.data),
   changeStatus: (id: string, statut: string) =>
     api.patch(`/invoices/${id}/status`, { statut }).then(r => r.data),
+  updatePayment: (id: string, data: { statut?: string; date_depot?: string; date_encaissement?: string; type_virement?: string }) =>
+    api.patch(`/invoices/${id}/payment`, data).then(r => r.data),
   pending: () => api.get('/invoices/admin/pending').then(r => r.data),
   audit: (id: string) => api.get(`/invoices/${id}/audit`).then(r => r.data),
 };

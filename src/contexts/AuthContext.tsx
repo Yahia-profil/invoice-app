@@ -52,19 +52,24 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const isAdmin = useCallback(() => userRole === 'admin', [userRole]);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    const stored = localStorage.getItem('user');
-    if (token && stored) {
+    const initAuth = async () => {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        setLoading(false);
+        return;
+      }
       try {
-        const user = JSON.parse(stored);
+        const user = await authApi.me();
+        localStorage.setItem('user', JSON.stringify(user));
         setCurrentUser(user);
         setUserRole(user.role);
       } catch {
         localStorage.removeItem('token');
         localStorage.removeItem('user');
       }
-    }
-    setLoading(false);
+      setLoading(false);
+    };
+    initAuth();
   }, []);
 
   const value = { currentUser, userRole, login, register, logout, loading, isAdmin };

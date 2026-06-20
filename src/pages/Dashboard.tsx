@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Box, Paper, Typography, Button, Card, CardContent, List, ListItem,
   ListItemText, AppBar, Toolbar, IconButton, Menu, MenuItem, Avatar,
@@ -6,7 +7,7 @@ import {
 } from '@mui/material';
 import {
   PeopleAlt, Receipt, Description, Logout, Brightness4, Brightness7,
-  TrendingUp, AttachMoney, Schedule, CheckCircle, Cancel, Add
+  TrendingUp, AttachMoney, Schedule, CheckCircle, Cancel, Add, Settings
 } from '@mui/icons-material';
 import { useAuth } from '../contexts/AuthContext';
 import { useData } from '../contexts/DataContext';
@@ -16,6 +17,8 @@ import { InvoiceList } from '../components/InvoiceList';
 import { AdminPanel } from '../components/AdminPanel';
 import { AnimatedCounter } from '../components/AnimatedCounter';
 import { ActivityTimeline } from '../components/ActivityTimeline';
+import { CompanySettingsDialog } from '../components/CompanySettingsDialog';
+import { QuoteList } from '../components/QuoteList';
 import { quoteApi } from '../services/api';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend } from 'recharts';
 
@@ -24,9 +27,11 @@ export const Dashboard: React.FC = () => {
   const { clients, invoices } = useData();
   const { darkMode, toggleDarkMode } = useCustomTheme();
   const theme = useTheme();
+  const navigate = useNavigate();
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
-  const [activeView, setActiveView] = useState<'overview' | 'clients' | 'invoices' | 'admin'>('overview');
+  const [activeView, setActiveView] = useState<'overview' | 'clients' | 'invoices' | 'quotes' | 'admin'>('overview');
   const [quotes, setQuotes] = useState<any[]>([]);
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   useEffect(() => {
     quoteApi.list().then(setQuotes).catch(() => {});
@@ -60,6 +65,7 @@ export const Dashboard: React.FC = () => {
     { id: 'overview', label: 'Tableau de bord', icon: <Description /> },
     { id: 'clients', label: 'Clients', icon: <PeopleAlt /> },
     { id: 'invoices', label: 'Factures', icon: <Receipt /> },
+    { id: 'quotes', label: 'Devis', icon: <Description /> },
     ...(isAdmin() ? [{ id: 'admin', label: 'Administration', icon: <Description /> }] : [])
   ];
 
@@ -67,6 +73,7 @@ export const Dashboard: React.FC = () => {
     switch (activeView) {
       case 'clients': return <ClientList />;
       case 'invoices': return <InvoiceList />;
+      case 'quotes': return <QuoteList />;
       case 'admin': return <AdminPanel />;
       default:
         return (
@@ -162,9 +169,9 @@ export const Dashboard: React.FC = () => {
                     <Button variant="contained" startIcon={<PeopleAlt />}
                       onClick={() => setActiveView('clients')}>Ajouter un client</Button>
                     <Button variant="contained" color="secondary" startIcon={<Receipt />}
-                      onClick={() => window.location.href = '/invoice-form'}>Créer une facture</Button>
+                      onClick={() => navigate('/invoice-form')}>Créer une facture</Button>
                     <Button variant="contained" color="success" startIcon={<Description />}
-                      onClick={() => window.location.href = '/quote-form'}>Créer un devis</Button>
+                      onClick={() => navigate('/quote-form')}>Créer un devis</Button>
                     <Button variant="outlined" startIcon={<Receipt />}
                       onClick={() => setActiveView('invoices')}>Voir les factures</Button>
                   </Box>
@@ -205,8 +212,8 @@ export const Dashboard: React.FC = () => {
       </AppBar>
 
       <Box sx={{ display: 'flex', minHeight: 'calc(100vh - 64px)' }}>
-        <Paper sx={{ width: 260, mr: 2, borderRadius: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider' }} elevation={0}>
-          <List sx={{ pt: 2 }}>
+        <Paper sx={{ width: 260, mr: 2, borderRadius: 0, bgcolor: 'background.paper', borderRight: 1, borderColor: 'divider', display: 'flex', flexDirection: 'column' }} elevation={0}>
+          <List sx={{ pt: 2, flex: 1 }}>
             {menuItems.map((item) => (
               <ListItem key={item.id} sx={{
                 cursor: 'pointer', mx: 1, borderRadius: 2, mb: 0.5,
@@ -218,6 +225,13 @@ export const Dashboard: React.FC = () => {
                 <ListItemText primary={item.label} sx={{ ml: 2, '& .MuiTypography-root': { fontWeight: activeView === item.id ? 600 : 400 } }} />
               </ListItem>
             ))}
+            <Box sx={{ mt: 'auto', borderTop: 1, borderColor: 'divider', pt: 1, mx: 1 }}>
+              <ListItem sx={{ cursor: 'pointer', borderRadius: 2 }}
+                onClick={() => setSettingsOpen(true)}>
+                <Settings />
+                <ListItemText primary="Paramètres" sx={{ ml: 2 }} />
+              </ListItem>
+            </Box>
           </List>
         </Paper>
 
@@ -226,10 +240,12 @@ export const Dashboard: React.FC = () => {
 
       <Zoom in={true} style={{ transitionDelay: '300ms' }}>
         <Fab color="primary" sx={{ position: 'fixed', bottom: 24, right: 24, zIndex: 1000, boxShadow: '0 4px 20px rgba(0,0,0,0.3)' }}
-          onClick={() => window.location.href = '/invoice-form'}>
+          onClick={() => navigate('/invoice-form')}>
           <Add />
         </Fab>
       </Zoom>
+
+      <CompanySettingsDialog open={settingsOpen} onClose={() => setSettingsOpen(false)} />
     </Box>
   );
 };

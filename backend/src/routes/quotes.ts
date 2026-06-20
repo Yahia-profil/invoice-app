@@ -32,8 +32,10 @@ const quoteSchema = z.object({
 });
 
 router.get('/', async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.userRole === 'admin';
+  const where = isAdmin ? {} : { user_id: req.userId };
   const quotes = await prisma.quote.findMany({
-    where: { user_id: req.userId },
+    where,
     include: { articles: true },
     orderBy: { created_at: 'desc' },
   });
@@ -42,7 +44,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   const quote = await prisma.quote.findFirst({
-    where: { id: req.params.id, user_id: req.userId },
+    where: { id: req.params.id as string, user_id: req.userId },
     include: { articles: true },
   });
   if (!quote) { res.status(404).json({ error: 'Quote not found' }); return; }
@@ -89,14 +91,14 @@ router.post('/', async (req: AuthRequest, res: Response) => {
 
 router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
-    const existing = await prisma.quote.findFirst({ where: { id: req.params.id, user_id: req.userId } });
+    const existing = await prisma.quote.findFirst({ where: { id: req.params.id as string, user_id: req.userId } });
     if (!existing) { res.status(404).json({ error: 'Quote not found' }); return; }
 
     const data = quoteSchema.partial().parse(req.body);
-    await prisma.quoteArticle.deleteMany({ where: { quote_id: req.params.id } });
+    await prisma.quoteArticle.deleteMany({ where: { quote_id: req.params.id as string } });
 
     const updated = await prisma.quote.update({
-      where: { id: req.params.id },
+      where: { id: req.params.id as string },
       data: {
         ...data,
         date_validite: data.date_validite ? new Date(data.date_validite) : undefined,
@@ -123,9 +125,9 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 });
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
-  const existing = await prisma.quote.findFirst({ where: { id: req.params.id, user_id: req.userId } });
+  const existing = await prisma.quote.findFirst({ where: { id: req.params.id as string, user_id: req.userId } });
   if (!existing) { res.status(404).json({ error: 'Quote not found' }); return; }
-  await prisma.quote.delete({ where: { id: req.params.id } });
+  await prisma.quote.delete({ where: { id: req.params.id as string } });
   res.json({ success: true });
 });
 

@@ -14,8 +14,10 @@ const clientSchema = z.object({
 });
 
 router.get('/', async (req: AuthRequest, res: Response) => {
+  const isAdmin = req.userRole === 'admin';
+  const where = isAdmin ? {} : { user_id: req.userId };
   const clients = await prisma.client.findMany({
-    where: { user_id: req.userId },
+    where,
     orderBy: { created_at: 'desc' },
   });
   res.json(clients);
@@ -23,7 +25,7 @@ router.get('/', async (req: AuthRequest, res: Response) => {
 
 router.get('/:id', async (req: AuthRequest, res: Response) => {
   const client = await prisma.client.findFirst({
-    where: { id: req.params.id, user_id: req.userId },
+    where: { id: req.params.id as string, user_id: req.userId },
   });
   if (!client) { res.status(404).json({ error: 'Client not found' }); return; }
   res.json(client);
@@ -46,10 +48,10 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
   try {
     const data = clientSchema.partial().parse(req.body);
     const client = await prisma.client.findFirst({
-      where: { id: req.params.id, user_id: req.userId },
+      where: { id: req.params.id as string, user_id: req.userId },
     });
     if (!client) { res.status(404).json({ error: 'Client not found' }); return; }
-    const updated = await prisma.client.update({ where: { id: req.params.id }, data });
+    const updated = await prisma.client.update({ where: { id: req.params.id as string }, data });
     res.json(updated);
   } catch (err) {
     if (err instanceof z.ZodError) { res.status(400).json({ error: err.errors }); return; }
@@ -59,10 +61,10 @@ router.put('/:id', async (req: AuthRequest, res: Response) => {
 
 router.delete('/:id', async (req: AuthRequest, res: Response) => {
   const client = await prisma.client.findFirst({
-    where: { id: req.params.id, user_id: req.userId },
+    where: { id: req.params.id as string, user_id: req.userId },
   });
   if (!client) { res.status(404).json({ error: 'Client not found' }); return; }
-  await prisma.client.delete({ where: { id: req.params.id } });
+  await prisma.client.delete({ where: { id: req.params.id as string } });
   res.json({ success: true });
 });
 

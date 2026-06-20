@@ -40,8 +40,8 @@ export const QuoteForm: React.FC = () => {
 
   const generateQuoteNumber = () => {
     const year = new Date().getFullYear();
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    return `DEV-${year}-${random}`;
+    const timestamp = Date.now().toString().slice(-6);
+    return `DEV-${year}-${timestamp}`;
   };
 
   const calculerTotauxArticle = (quantite: number, prix_unitaire: number, tva: number) => {

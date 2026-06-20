@@ -2,7 +2,7 @@ import { Router, Response } from 'express';
 import { z } from 'zod';
 import crypto from 'crypto';
 import { prisma } from '../index';
-import { authMiddleware, AuthRequest } from '../middleware/auth';
+import { authMiddleware, adminOnly, AuthRequest } from '../middleware/auth';
 
 const router = Router();
 router.use(authMiddleware);
@@ -32,7 +32,7 @@ router.get('/keys', async (req: AuthRequest, res: Response) => {
   }
 });
 
-router.post('/sign', async (req: AuthRequest, res: Response) => {
+router.post('/sign', adminOnly, async (req: AuthRequest, res: Response) => {
   try {
     const data = z.object({
       invoice_id: z.string().min(1),
@@ -100,7 +100,7 @@ router.post('/sign', async (req: AuthRequest, res: Response) => {
         invoice_id: data.invoice_id,
         action: 'status_change:signee',
         user_id: req.userId!,
-        old_statut: 'en_attente_signature',
+        old_statut: invoice.statut,
         new_statut: 'signee',
         details: 'Digitally signed by admin',
       },

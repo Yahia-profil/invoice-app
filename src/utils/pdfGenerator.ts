@@ -1,18 +1,20 @@
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { Facture, Client } from '../types';
+import { getCompanyInfo } from './companyConfig';
 
 export const generateFacturePDF = (facture: Facture, client: Client) => {
   const doc = new jsPDF();
+  const company = getCompanyInfo();
 
   doc.setFontSize(20);
-  doc.text('MA SOCIETE', 105, 20, { align: 'center' });
+  doc.text(company.name, 105, 20, { align: 'center' });
 
   doc.setFontSize(10);
-  doc.text('Adresse: 123 Rue de la République', 20, 35);
-  doc.text('Téléphone: +33 1 23 45 67 89', 20, 40);
-  doc.text('Email: contact@masociete.fr', 20, 45);
-  doc.text('SIRET: 123 456 789 00012', 20, 50);
+  doc.text(`Adresse: ${company.address}`, 20, 35);
+  doc.text(`Téléphone: ${company.phone}`, 20, 40);
+  doc.text(`Email: ${company.email}`, 20, 45);
+  doc.text(`SIRET: ${company.siret}`, 20, 50);
 
   doc.setFontSize(12);
   doc.text('Client:', 120, 35);
@@ -80,15 +82,16 @@ export const generateFacturePDF = (facture: Facture, client: Client) => {
 
 export const generateDevisPDF = (facture: Facture, client: Client) => {
   const doc = new jsPDF();
+  const company = getCompanyInfo();
 
   doc.setFontSize(20);
-  doc.text('MA SOCIETE', 105, 20, { align: 'center' });
+  doc.text(company.name, 105, 20, { align: 'center' });
 
   doc.setFontSize(10);
-  doc.text('Adresse: 123 Rue de la République', 20, 35);
-  doc.text('Téléphone: +33 1 23 45 67 89', 20, 40);
-  doc.text('Email: contact@masociete.fr', 20, 45);
-  doc.text('SIRET: 123 456 789 00012', 20, 50);
+  doc.text(`Adresse: ${company.address}`, 20, 35);
+  doc.text(`Téléphone: ${company.phone}`, 20, 40);
+  doc.text(`Email: ${company.email}`, 20, 45);
+  doc.text(`SIRET: ${company.siret}`, 20, 50);
 
   doc.setFontSize(12);
   doc.text('Client:', 120, 35);

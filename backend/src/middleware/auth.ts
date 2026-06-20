@@ -1,7 +1,14 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'invoice-mgmt-secret-key-change-in-prod';
+function getJwtSecret(): string {
+  const secret = process.env.JWT_SECRET;
+  if (!secret) {
+    throw new Error('JWT_SECRET is not defined in environment variables');
+  }
+  return secret;
+}
+const JWT_SECRET = getJwtSecret();
 
 export interface AuthRequest extends Request {
   userId?: string;

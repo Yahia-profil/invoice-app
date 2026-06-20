@@ -4,6 +4,7 @@ import { LoginForm } from '../components/LoginForm';
 import { Dashboard } from '../pages/Dashboard';
 import { InvoiceForm } from '../components/InvoiceForm';
 import { QuoteForm } from '../components/QuoteForm';
+import { QuoteList } from '../components/QuoteList';
 import { useAuth } from '../contexts/AuthContext';
 
 const PrivateRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -43,6 +44,14 @@ export const AppRoutes: React.FC = () => {
           element={
             <PrivateRoute>
               <QuoteForm />
+            </PrivateRoute>
+          } 
+        />
+        <Route 
+          path="/quotes" 
+          element={
+            <PrivateRoute>
+              <QuoteList />
             </PrivateRoute>
           } 
         />

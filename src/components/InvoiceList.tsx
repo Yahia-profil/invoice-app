@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import {
   Box, Paper, Typography, Button, Table, TableBody, TableCell,
@@ -9,7 +10,7 @@ import {
 import {
   Delete as DeleteIcon, MoreVert as MoreIcon,
   PictureAsPdf as PdfIcon, Search as SearchIcon,
-  Payment as PaymentIcon,
+  Payment as PaymentIcon, Edit as EditIcon,
   Send as SendIcon
 } from '@mui/icons-material';
 import { Facture, TypeVirement } from '../types';
@@ -19,12 +20,10 @@ import { useData } from '../contexts/DataContext';
 import { StatusBadge } from './StatusBadge';
 
 export const InvoiceList: React.FC = () => {
-  const { clients } = useData();
+  const { clients, invoices, refreshInvoices } = useData();
+  const navigate = useNavigate();
   const theme = useTheme();
-  const [invoices, setInvoices] = useState<Facture[]>([]);
-  const [filteredInvoices, setFilteredInvoices] = useState<Facture[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [loading, setLoading] = useState(true);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const [selectedInvoice, setSelectedInvoice] = useState<Facture | null>(null);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
@@ -36,40 +35,23 @@ export const InvoiceList: React.FC = () => {
     statut: 'en_attente_paiement' as string,
   });
 
-  const loadInvoices = React.useCallback(async () => {
-    try {
-      const data = await invoiceApi.list();
-      setInvoices(data);
-      setFilteredInvoices(data);
-    } catch (err: any) {
-      toast.error('Erreur chargement: ' + (err.response?.data?.error || err.message));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  React.useEffect(() => { loadInvoices(); }, [loadInvoices]);
-
-  React.useEffect(() => {
-    if (searchTerm === '') {
-      setFilteredInvoices(invoices);
-    } else {
-      const term = searchTerm.toLowerCase();
-      setFilteredInvoices(invoices.filter(inv => {
-        const client = clients.find(c => c.id === inv.client_id);
-        return inv.numero.toLowerCase().includes(term) ||
-          inv.statut.toLowerCase().includes(term) ||
-          (client?.nom || '').toLowerCase().includes(term) ||
-          inv.total_ttc.toString().includes(term);
-      }));
-    }
+  const filteredInvoices = useMemo(() => {
+    if (searchTerm === '') return invoices;
+    const term = searchTerm.toLowerCase();
+    return invoices.filter(inv => {
+      const client = clients.find(c => c.id === inv.client_id);
+      return inv.numero.toLowerCase().includes(term) ||
+        inv.statut.toLowerCase().includes(term) ||
+        (client?.nom || '').toLowerCase().includes(term) ||
+        inv.total_ttc.toString().includes(term);
+    });
   }, [searchTerm, invoices, clients]);
 
   const handleDelete = async (invoice: Facture) => {
     if (!window.confirm(`Supprimer la facture "${invoice.numero}" ?`)) return;
     try {
       await invoiceApi.delete(invoice.id);
-      setInvoices(invoices.filter(inv => inv.id !== invoice.id));
+      refreshInvoices();
       toast.success('Facture supprimée!');
     } catch (err: any) {
       toast.error('Erreur: ' + (err.response?.data?.error || err.message));
@@ -78,12 +60,16 @@ export const InvoiceList: React.FC = () => {
 
   const handleSubmitForValidation = async (invoice: Facture) => {
     try {
-      const updated = await invoiceApi.changeStatus(invoice.id, 'soumise');
-      setInvoices(invoices.map(inv => inv.id === invoice.id ? updated : inv));
+      await invoiceApi.changeStatus(invoice.id, 'soumise');
+      refreshInvoices();
       toast.success('Facture soumise pour validation admin');
     } catch (err: any) {
       toast.error('Erreur: ' + (err.response?.data?.error || err.message));
     }
+  };
+
+  const handleEdit = (invoice: Facture) => {
+    navigate(`/invoice-form?id=${invoice.id}`);
   };
 
   const handleGeneratePDF = (invoice: Facture) => {
@@ -120,10 +106,9 @@ export const InvoiceList: React.FC = () => {
   const handleUpdatePayment = async () => {
     if (!selectedInvoice) return;
     try {
-      await invoiceApi.changeStatus(selectedInvoice.id, paymentData.statut);
-      const updated = await invoiceApi.list();
-      setInvoices(updated);
-      toast.success('Statut paiement mis à jour!');
+      await invoiceApi.updatePayment(selectedInvoice.id, paymentData);
+      refreshInvoices();
+      toast.success('Paiement mis à jour!');
       setPaymentDialogOpen(false);
     } catch (err: any) {
       toast.error('Erreur: ' + (err.response?.data?.error || err.message));
@@ -135,16 +120,12 @@ export const InvoiceList: React.FC = () => {
     setSelectedInvoice(invoice);
   };
 
-  if (loading) {
-    return <Container><Typography>Chargement des factures...</Typography></Container>;
-  }
-
   return (
     <Container maxWidth="lg">
       <Paper elevation={0} sx={{ p: 4, mt: 2, borderRadius: 3, background: alpha(theme.palette.background.paper, 0.8), backdropFilter: 'blur(10px)', border: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>Liste des Factures</Typography>
-          <Button variant="contained" startIcon={<PdfIcon />} onClick={() => window.location.href = '/invoice-form'}>
+          <Button variant="contained" startIcon={<PdfIcon />} onClick={() => navigate('/invoice-form')}>
             Créer une facture
           </Button>
         </Box>
@@ -186,9 +167,14 @@ export const InvoiceList: React.FC = () => {
                       <TableCell align="right">
                         <Box sx={{ display: 'flex', gap: 0.5, justifyContent: 'flex-end', alignItems: 'center' }}>
                           {invoice.statut === 'brouillon' && (
-                            <Button size="small" color="primary" onClick={() => handleSubmitForValidation(invoice)}>
-                              Soumettre
-                            </Button>
+                            <>
+                              <Button size="small" color="primary" onClick={() => handleSubmitForValidation(invoice)}>
+                                Soumettre
+                              </Button>
+                              <IconButton size="small" color="default" onClick={() => handleEdit(invoice)} title="Modifier">
+                                <EditIcon fontSize="small" />
+                              </IconButton>
+                            </>
                           )}
                           {canDownloadDevis(invoice.statut) && (
                             <Button size="small" color="secondary" startIcon={<PdfIcon />}
@@ -231,6 +217,11 @@ export const InvoiceList: React.FC = () => {
           onClose={() => { setAnchorEl(null); setSelectedInvoice(null); }}>
           {selectedInvoice && (
             [
+              selectedInvoice.statut === 'brouillon' && (
+                <MenuItem key="edit" onClick={() => { handleEdit(selectedInvoice); setAnchorEl(null); }}>
+                  <EditIcon sx={{ mr: 1, fontSize: 16 }} /> Modifier
+                </MenuItem>
+              ),
               canDownloadDevis(selectedInvoice.statut) && (
                 <MenuItem key="devis" onClick={() => { handleGenerateDevis(selectedInvoice); setAnchorEl(null); }}>
                   <PdfIcon sx={{ mr: 1, fontSize: 16 }} /> Télécharger Devis
